@@ -10,7 +10,6 @@ import "core:time"
 
 PORT :: 8080
 
-
 on_open :: proc "c" (client: ws.Client_Connection) {
 	context = runtime.default_context()
 
@@ -66,11 +65,7 @@ on_message :: proc "c" (client: ws.Client_Connection, msg: [^]u8, size: u64, typ
 	ws.close_client(client)
 }
 
-global_ctx: runtime.Context
-
 main :: proc() {
-	global_ctx = context
-
 	server := ws.Server {
 		host = "0.0.0.0",
 		port = PORT,
