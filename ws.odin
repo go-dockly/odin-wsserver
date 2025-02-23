@@ -1,6 +1,8 @@
 package wsserver
 
 import "core:c"
+import "core:slice"
+import "core:strings"
 
 // Opaque type for `pthread_t` from libpthread
 PThread :: [size_of(rawptr)]u8
@@ -76,9 +78,9 @@ Frame_Type :: enum (c.int) {
 }
 
 Events :: struct {
-	onopen:    proc(client: Client_Connection),
-	onclose:   proc(client: Client_Connection),
-	onmessage: proc(client: Client_Connection, msg: [^]u8, size: u64, type: Frame_Type),
+	onopen:    proc "c" (client: Client_Connection),
+	onclose:   proc "c" (client: Client_Connection),
+	onmessage: proc "c" (client: Client_Connection, msg: [^]u8, size: u64, type: Frame_Type),
 }
 
 when ODIN_OS == .Windows do foreign import ws "libws.lib"
@@ -97,9 +99,47 @@ foreign ws {
 	ping :: proc(client: Client_Connection, threshold: c.int) ---
 	sendframe_txt :: proc(client: Client_Connection, msg: cstring) -> c.int ---
 	sendframe_txt_bcast :: proc(port: u16, msg: cstring) -> c.int ---
-	sendframe_bin :: proc(client: Client_Connection, msg: []u8, size: u64) -> c.int ---
+	sendframe_bin :: proc(client: Client_Connection, msg: [^]u8, size: u64) -> c.int ---
 	sendframe_bin_bcast :: proc(port: u16, msg: [^]u8, size: u64) -> c.int ---
 	get_state :: proc(client: Client_Connection) -> Connection_State ---
 	close_client :: proc(client: Client_Connection) -> c.int ---
 	socket :: proc(server: ^Server) -> c.int ---
+}
+
+// Wrapper proc for `sendframe_bcast`
+send_frame_broadcast :: proc(port: u16, data: []byte, type: Frame_Type) -> int {
+	msg := slice.as_ptr(data)
+	return int(sendframe_bcast(port, msg, u64(len(data)), type))
+}
+
+// Wrapper proc for `sendframe`
+send_frame :: proc(client: Client_Connection, data: []byte, type: Frame_Type) -> int {
+	msg := slice.as_ptr(data)
+	return int(sendframe(client, msg, u64(len(data)), type))
+}
+
+// Wrapper proc for `sendframe_txt`
+send_text_frame :: proc(client: Client_Connection, msg: string) -> int {
+	cstr := strings.clone_to_cstring(msg)
+	defer delete(cstr)
+	return int(sendframe_txt(client, cstr))
+}
+
+// Wrapper proc for `sendframe_txt_bcast`
+send_text_frame_broadcast :: proc(port: u16, msg: string) -> int {
+	cstr := strings.clone_to_cstring(msg)
+	defer delete(cstr)
+	return int(sendframe_txt_bcast(port, cstr))
+}
+
+// Wrapper proc for `sendframe_bin`
+send_binary_frame :: proc(client: Client_Connection, data: []byte) -> int {
+	msg := slice.as_ptr(data)
+	return int(sendframe_bin(client, msg, u64(len(data))))
+}
+
+// Wrapper proc for `sendframe_bin_bcast`
+send_binary_frame_broadcast :: proc(port: u16, data: []byte) -> int {
+	msg := slice.as_ptr(data)
+	return int(sendframe_bin_bcast(port, msg, u64(len(data))))
 }
