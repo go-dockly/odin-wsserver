@@ -75,6 +75,6 @@ main :: proc() {
 	}
 
 	fmt.printfln("Listening on port %d", PORT)
-	ws.socket(&server)
+	ws.listen(&server)
 	fmt.printfln("Socket closed")
 }

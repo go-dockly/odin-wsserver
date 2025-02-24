@@ -12,10 +12,19 @@ PThread_Mutex :: [40]u8
 PThread_Cond :: [48]u8
 
 // Alias for `ws_server`
-Server :: struct {
+C_Server :: struct {
 	host:        cstring,
 	port:        u16,
 	thread_loop: c.int,
+	timeout_ms:  u32,
+	evs:         Events,
+	ctx:         rawptr,
+}
+
+Server :: struct {
+	host:        string,
+	port:        u16,
+	thread_loop: int,
 	timeout_ms:  u32,
 	evs:         Events,
 	ctx:         rawptr,
@@ -94,16 +103,39 @@ foreign ws {
 	set_connection_context :: proc(client: Client_Connection, ptr: rawptr) ---
 	getaddress :: proc(client: Client_Connection) -> cstring ---
 	getport :: proc(client: Client_Connection) -> cstring ---
+	// Use `send_frame` for a more Odin-like experience
 	sendframe :: proc(client: Client_Connection, msg: [^]u8, size: u64, type: Frame_Type) -> c.int ---
+	// Use `send_frame_broadcast` for a more Odin-like experience
 	sendframe_bcast :: proc(port: u16, msg: [^]u8, size: u64, type: Frame_Type) -> c.int ---
 	ping :: proc(client: Client_Connection, threshold: c.int) ---
+	// Use `send_text_frame` for a more Odin-like experience
 	sendframe_txt :: proc(client: Client_Connection, msg: cstring) -> c.int ---
+	// Use `send_text_frame_broadcast` for a more Odin-like experience
 	sendframe_txt_bcast :: proc(port: u16, msg: cstring) -> c.int ---
+	// Use `send_binary_frame` for a more Odin-like experience
 	sendframe_bin :: proc(client: Client_Connection, msg: [^]u8, size: u64) -> c.int ---
+	// Use `send_binary_frame_broadcast` for a more Odin-like experience
 	sendframe_bin_bcast :: proc(port: u16, msg: [^]u8, size: u64) -> c.int ---
 	get_state :: proc(client: Client_Connection) -> Connection_State ---
 	close_client :: proc(client: Client_Connection) -> c.int ---
-	socket :: proc(server: ^Server) -> c.int ---
+	// Use `listen` for a more Odin-like experience
+	socket :: proc(server: ^C_Server) -> c.int ---
+}
+
+// Alias for `socket`. Starts the websocket server and listens for connections.
+listen :: proc(server: ^Server) -> int {
+	host := strings.clone_to_cstring(server.host)
+	defer delete(host)
+
+	s := C_Server {
+		timeout_ms = server.timeout_ms,
+		port       = server.port,
+		host       = host,
+		ctx        = server.ctx,
+		evs        = server.evs,
+	}
+
+	return int(socket(&s))
 }
 
 // Wrapper proc for `sendframe_bcast`

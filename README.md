@@ -108,7 +108,7 @@ main :: proc() {
 	}
 
 	fmt.printfln("Listening on port %d", PORT)
-	ws.socket(&server)
+	ws.listen(&server)
 	fmt.printfln("Socket closed")
 }
 ```
@@ -129,4 +129,3 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE) for detai
 ---
 
 For more details on `wsServer`, visit the official repository: [Theldus/wsServer](https://github.com/Theldus/wsServer).
-
