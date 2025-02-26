@@ -24,9 +24,11 @@ Follow these instructions to compile the library: [wsServer CMake Instructions](
 ### Example WebSocket Server
 
 - [Echo Server](./examples/echo/echo.odin)
+- [Chat Server](./examples/chat/chat.odin)
 - [Sample Server](./examples/complete/complete.odin)
 
 ### Sample
+
 <details>
 <summary>Click to expand code sample</summary>
 
