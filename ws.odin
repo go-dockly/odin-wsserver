@@ -24,7 +24,8 @@ C_Server :: struct {
 Server :: struct {
 	host:        string,
 	port:        u16,
-	thread_loop: int,
+	// Create a new thread for the socket accept function 
+	thread_loop: bool,
 	timeout_ms:  u32,
 	evs:         Events,
 	ctx:         rawptr,
@@ -128,11 +129,12 @@ listen :: proc(server: ^Server) -> int {
 	defer delete(host)
 
 	s := C_Server {
-		timeout_ms = server.timeout_ms,
-		port       = server.port,
-		host       = host,
-		ctx        = server.ctx,
-		evs        = server.evs,
+		timeout_ms  = server.timeout_ms,
+		thread_loop = server.thread_loop ? 1 : 0,
+		port        = server.port,
+		host        = host,
+		ctx         = server.ctx,
+		evs         = server.evs,
 	}
 
 	return int(socket(&s))
