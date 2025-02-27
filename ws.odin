@@ -193,7 +193,6 @@ listen :: proc(server: ^Server) -> int {
 				defer free_all(context.temp_allocator)
 
 				ctx := get_library_context(client)
-				fmt.println("here")
 				ctx.events.onmessage(client, msg[:size], type)
 			}},
 	}
