@@ -11,9 +11,7 @@ import "core:strings"
 
 PORT :: 8080
 
-on_open :: proc "c" (client: ws.Client_Connection) {
-	context = runtime.default_context()
-
+on_open :: proc(client: ws.Client_Connection) {
 	client_addr := ws.getaddress(client)
 	client_port := ws.getport(client)
 
@@ -21,40 +19,35 @@ on_open :: proc "c" (client: ws.Client_Connection) {
 }
 
 
-on_close :: proc "c" (client: ws.Client_Connection) {
-	context = runtime.default_context()
-
+on_close :: proc(client: ws.Client_Connection) {
 	client_addr := ws.getaddress(client)
 
 	fmt.printf("Connection closed, addr: %s\n", client_addr)
 }
 
-on_message :: proc "c" (client: ws.Client_Connection, msg: [^]u8, size: u64, type: ws.Frame_Type) {
-	context = runtime.default_context()
-
+on_message :: proc(client: ws.Client_Connection, msg: []u8, type: ws.Frame_Type) {
 	client_addr := ws.getaddress(client)
 
 	message := "<not parsed>"
 	if type == .Text {
-		message = strings.string_from_null_terminated_ptr(msg, int(size))
+		message = string(msg)
 	}
 
 	fmt.printf(
 		"I received a message '%s', size %d, type %s from client %s\n",
 		message,
-		size,
+		len(msg),
 		type,
 		client_addr,
 	)
 
-	ws.sendframe_bcast(PORT, msg, size, type)
+	ws.send_frame(client, msg, type)
 }
 
 main :: proc() {
 	socket := ws.Server {
 		host = "0.0.0.0",
 		port = PORT,
-		thread_loop = 0,
 		timeout_ms = 1000,
 		evs = {onopen = on_open, onclose = on_close, onmessage = on_message},
 	}

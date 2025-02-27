@@ -1,18 +1,12 @@
 package complete
 
 import ws "../.."
-import "base:runtime"
-import "core:c"
 import "core:fmt"
-import "core:mem"
-import "core:strings"
 import "core:time"
 
 PORT :: 8080
 
-on_open :: proc "c" (client: ws.Client_Connection) {
-	context = runtime.default_context()
-
+on_open :: proc(client: ws.Client_Connection) {
 	client_addr := ws.getaddress(client)
 	client_port := ws.getport(client)
 
@@ -21,27 +15,23 @@ on_open :: proc "c" (client: ws.Client_Connection) {
 }
 
 
-on_close :: proc "c" (client: ws.Client_Connection) {
-	context = runtime.default_context()
-
+on_close :: proc(client: ws.Client_Connection) {
 	client_addr := ws.getaddress(client)
 	fmt.printf("Connection closed, addr: %s\n", client_addr)
 }
 
-on_message :: proc "c" (client: ws.Client_Connection, msg: [^]u8, size: u64, type: ws.Frame_Type) {
-	context = runtime.default_context()
-
+on_message :: proc(client: ws.Client_Connection, msg: []u8, type: ws.Frame_Type) {
 	client_addr := ws.getaddress(client)
 
 	message := "<not parsed>"
 	if type == .Text {
-		message = strings.string_from_null_terminated_ptr(msg, int(size))
+		message = string(msg)
 	}
 
 	fmt.printf(
 		"I received a message '%s', size %d, type %s from client %s\n",
 		message,
-		size,
+		len(msg),
 		type,
 		client_addr,
 	)
@@ -52,8 +42,7 @@ on_message :: proc "c" (client: ws.Client_Connection, msg: [^]u8, size: u64, typ
 	ws.send_text_frame(client, "world")
 	time.sleep(2 * time.Second)
 
-	out_msg := fmt.aprintf("you sent a %s message", type)
-	defer delete(out_msg)
+	out_msg := fmt.tprintf("you sent a %s message", type)
 
 	ws.send_text_frame(client, out_msg)
 	time.sleep(2 * time.Second)
@@ -70,7 +59,6 @@ main :: proc() {
 		host = "0.0.0.0",
 		port = PORT,
 		timeout_ms = 1000,
-		thread_loop = 0,
 		evs = {onmessage = on_message, onclose = on_close, onopen = on_open},
 	}
 

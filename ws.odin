@@ -1,6 +1,9 @@
 package wsserver
 
+import "base:runtime"
 import "core:c"
+import "core:fmt"
+import "core:mem"
 import "core:slice"
 import "core:strings"
 
@@ -12,12 +15,13 @@ PThread_Mutex :: [40]u8
 PThread_Cond :: [48]u8
 
 // Alias for `ws_server`
+@(private)
 C_Server :: struct {
 	host:        cstring,
 	port:        u16,
 	thread_loop: c.int,
 	timeout_ms:  u32,
-	evs:         Events,
+	evs:         C_Events,
 	ctx:         rawptr,
 }
 
@@ -87,10 +91,16 @@ Frame_Type :: enum (c.int) {
 	Unsupported  = 0xF,
 }
 
-Events :: struct {
+C_Events :: struct {
 	onopen:    proc "c" (client: Client_Connection),
 	onclose:   proc "c" (client: Client_Connection),
 	onmessage: proc "c" (client: Client_Connection, msg: [^]u8, size: u64, type: Frame_Type),
+}
+
+Events :: struct {
+	onopen:    proc(client: Client_Connection),
+	onclose:   proc(client: Client_Connection),
+	onmessage: proc(client: Client_Connection, msg: []u8, type: Frame_Type),
 }
 
 when ODIN_OS == .Windows do foreign import ws "libws.lib"
@@ -99,6 +109,7 @@ when ODIN_OS == .Darwin do foreign import ws "libws.a"
 
 @(link_prefix = "ws_")
 foreign ws {
+	@(private)
 	get_server_context :: proc(client: Client_Connection) -> rawptr ---
 	get_connection_context :: proc(client: Client_Connection) -> rawptr ---
 	set_connection_context :: proc(client: Client_Connection, ptr: rawptr) ---
@@ -119,8 +130,29 @@ foreign ws {
 	sendframe_bin_bcast :: proc(port: u16, msg: [^]u8, size: u64) -> c.int ---
 	get_state :: proc(client: Client_Connection) -> Connection_State ---
 	close_client :: proc(client: Client_Connection) -> c.int ---
-	// Use `listen` for a more Odin-like experience
+	@(private)
 	socket :: proc(server: ^C_Server) -> c.int ---
+}
+
+Library_Context :: struct {
+	events: Events,
+}
+
+Server_Context :: struct {
+	lib_ctx:  Library_Context,
+	user_ctx: rawptr,
+}
+
+@(private)
+get_library_context :: proc(client: Client_Connection) -> ^Library_Context {
+	ctx := cast(^Server_Context)get_server_context(client)
+	return &ctx.lib_ctx
+}
+
+// Retrieves the server context set in `Server` struct
+get_global_context :: proc(client: Client_Connection, $T: typeid) -> ^T {
+	ctx := cast(^Server_Context)get_server_context(client)
+	return cast(^T)ctx.user_ctx
 }
 
 // Alias for `socket`. Starts the websocket server and listens for connections.
@@ -128,13 +160,42 @@ listen :: proc(server: ^Server) -> int {
 	host := strings.clone_to_cstring(server.host)
 	defer delete(host)
 
+	ctx := Server_Context {
+		user_ctx = server.ctx,
+		lib_ctx = {events = server.evs},
+	}
+
 	s := C_Server {
-		timeout_ms  = server.timeout_ms,
+		timeout_ms = server.timeout_ms,
 		thread_loop = server.thread_loop ? 1 : 0,
-		port        = server.port,
-		host        = host,
-		ctx         = server.ctx,
-		evs         = server.evs,
+		port = server.port,
+		host = host,
+		ctx = &ctx,
+		evs = C_Events{onopen = proc "c" (client: Client_Connection) {
+				context = runtime.default_context()
+				defer free_all(context.temp_allocator)
+
+				ctx := get_library_context(client)
+				ctx.events.onopen(client)
+			}, onclose = proc "c" (client: Client_Connection) {
+				context = runtime.default_context()
+				defer free_all(context.temp_allocator)
+
+				ctx := get_library_context(client)
+				ctx.events.onclose(client)
+			}, onmessage = proc "c" (
+				client: Client_Connection,
+				msg: [^]u8,
+				size: u64,
+				type: Frame_Type,
+			) {
+				context = runtime.default_context()
+				defer free_all(context.temp_allocator)
+
+				ctx := get_library_context(client)
+				fmt.println("here")
+				ctx.events.onmessage(client, msg[:size], type)
+			}},
 	}
 
 	return int(socket(&s))

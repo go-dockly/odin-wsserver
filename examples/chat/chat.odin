@@ -1,41 +1,29 @@
 package chat
 
 import ws "../.."
-import "base:runtime"
 import "core:fmt"
 import "core:mem"
 import "core:os"
 import "core:slice"
-import "core:strings"
 import "core:sync"
 
-on_open :: proc "c" (client: ws.Client_Connection) {
-	context = runtime.default_context()
+on_open :: proc(client: ws.Client_Connection) {
 	tid := os.current_thread_id()
 	fmt.printfln("[client %d][thread %d] connected", client, tid)
 
-	ctx := cast(^Server_Context)ws.get_server_context(client)
+	ctx := ws.get_global_context(client, Server_Context)
 	ctx_add_client(ctx, client)
 }
 
-on_close :: proc "c" (client: ws.Client_Connection) {
-	context = runtime.default_context()
+on_close :: proc(client: ws.Client_Connection) {
 	tid := os.current_thread_id()
 	fmt.printfln("[client %d][thread %d] disconnected", client, tid)
 
-	ctx := cast(^Server_Context)ws.get_server_context(client)
+	ctx := ws.get_global_context(client, Server_Context)
 	ctx_remove_client(ctx, client)
 }
 
-on_message :: proc "c" (
-	client: ws.Client_Connection,
-	data: [^]u8,
-	size: u64,
-	type: ws.Frame_Type,
-) {
-	context = runtime.default_context()
-	defer free_all(context.temp_allocator)
-
+on_message :: proc(client: ws.Client_Connection, data: []u8, type: ws.Frame_Type) {
 	tid := os.current_thread_id()
 	fmt.printfln("[client %d][thread %d] sent message", client, tid)
 
@@ -45,10 +33,10 @@ on_message :: proc "c" (
 		return
 	}
 
-	ctx := cast(^Server_Context)ws.get_server_context(client)
-	clients := ctx_clone_clients(ctx, context.temp_allocator)
+	ctx := ws.get_global_context(client, Server_Context)
+	clients := ctx_clone_clients(ctx)
 
-	message := strings.string_from_null_terminated_ptr(data, int(size))
+	message := string(data)
 	chat_message := fmt.tprintf("[client %d] says: %s", client, message)
 	chat_message_for_self := fmt.tprintf("You said: %s", message)
 	for connection in clients {
@@ -68,7 +56,7 @@ Server_Context :: struct {
 ctx_add_client :: proc(ctx: ^Server_Context, client: ws.Client_Connection) {
 	sync.lock(ctx.mutex)
 	defer sync.unlock(ctx.mutex)
-	append_elem(&ctx.clients, client)
+	append(&ctx.clients, client)
 }
 
 ctx_remove_client :: proc(ctx: ^Server_Context, client: ws.Client_Connection) {
@@ -87,13 +75,10 @@ ctx_remove_client :: proc(ctx: ^Server_Context, client: ws.Client_Connection) {
 	shrink(&ctx.clients)
 }
 
-ctx_clone_clients :: proc(
-	ctx: ^Server_Context,
-	allocator: mem.Allocator,
-) -> []ws.Client_Connection {
+ctx_clone_clients :: proc(ctx: ^Server_Context) -> []ws.Client_Connection {
 	sync.lock(ctx.mutex)
 	defer sync.unlock(ctx.mutex)
-	return slice.clone(ctx.clients[:], allocator)
+	return slice.clone(ctx.clients[:], context.temp_allocator)
 }
 
 PORT :: 8080
