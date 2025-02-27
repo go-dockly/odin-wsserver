@@ -213,6 +213,7 @@ get_global_context :: proc(client: Client_Connection, $T: typeid) -> ^T
 
 #### `get_connection_context`
 Retrieves the user-defined context of the current connection.
+
 **TODO:** Create a wrapper function that auto casts.
 
 ```odin
@@ -229,6 +230,7 @@ set_connection_context :: proc(client: Client_Connection, ptr: rawptr)
 ### Event Handling
 
 Events can be set in the `Server` struct to handle client interactions.
+
 **Note:** The temporary allocator is always freed after each event call. Feel free to allocate and not free.
 
 ```odin
