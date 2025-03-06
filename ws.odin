@@ -4,6 +4,7 @@ import "base:runtime"
 import "core:c"
 import "core:fmt"
 import "core:mem"
+import "core:mem/virtual"
 import "core:slice"
 import "core:strings"
 
@@ -173,15 +174,31 @@ listen :: proc(server: ^Server) -> int {
 		ctx = &ctx,
 		evs = C_Events{onopen = proc "c" (client: Client_Connection) {
 				context = runtime.default_context()
-				defer free_all(context.temp_allocator)
+
+				arena: virtual.Arena
+				if err := virtual.arena_init_growing(&arena); err != nil {
+					fmt.println("failed to initialize growable arena.", err)
+					return
+				}
+				defer virtual.arena_free_all(&arena)
 
 				ctx := get_library_context(client)
+
+				context.temp_allocator = virtual.arena_allocator(&arena)
 				ctx.events.onopen(client)
 			}, onclose = proc "c" (client: Client_Connection) {
 				context = runtime.default_context()
-				defer free_all(context.temp_allocator)
+
+				arena: virtual.Arena
+				if err := virtual.arena_init_growing(&arena); err != nil {
+					fmt.println("failed to initialize growable arena.", err)
+					return
+				}
+				defer virtual.arena_free_all(&arena)
 
 				ctx := get_library_context(client)
+
+				context.temp_allocator = virtual.arena_allocator(&arena)
 				ctx.events.onclose(client)
 			}, onmessage = proc "c" (
 				client: Client_Connection,
@@ -190,9 +207,17 @@ listen :: proc(server: ^Server) -> int {
 				type: Frame_Type,
 			) {
 				context = runtime.default_context()
-				defer free_all(context.temp_allocator)
+
+				arena: virtual.Arena
+				if err := virtual.arena_init_growing(&arena); err != nil {
+					fmt.println("failed to initialize growable arena.", err)
+					return
+				}
+				defer virtual.arena_free_all(&arena)
 
 				ctx := get_library_context(client)
+
+				context.temp_allocator = virtual.arena_allocator(&arena)
 				ctx.events.onmessage(client, msg[:size], type)
 			}},
 	}
