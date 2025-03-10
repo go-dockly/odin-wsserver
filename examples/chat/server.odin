@@ -1,6 +1,6 @@
 package chat
 
-import ws "../"
+import ws "../../"
 import "core:fmt"
 import "core:mem"
 import "core:os"
@@ -24,17 +24,28 @@ on_close :: proc(client: ws.Client_Connection) {
 }
 
 on_message :: proc(client: ws.Client_Connection, data: []u8, type: ws.Frame_Type) {
-    tid := os.current_thread_id()
-    fmt.printfln("[client %d][thread %d] sent %s", client, tid, data)
-    if type != .Text {
-        ws.send_text_frame(client, "invalid message")
-        ws.close_client(client)
-        return
-    }
+	tid := os.current_thread_id()
+	fmt.printfln("[client %d][thread %d] sent message", client, tid)
 
-    // Simply echo the message back to the client
-    message := string(data)
-    ws.send_text_frame(client, message)
+	if type != .Text {
+		ws.send_text_frame(client, "invalid message")
+		ws.close_client(client)
+		return
+	}
+
+	ctx := ws.get_global_context(client, Server_Context)
+	clients := ctx_clone_clients(ctx)
+
+	message := string(data)
+	chat_message := fmt.tprintf("[client %d] says: %s", client, message)
+	chat_message_for_self := fmt.tprintf("You said: %s", message)
+	for connection in clients {
+		if connection == client {
+			ws.send_text_frame(client, chat_message_for_self)
+		} else {
+			ws.send_text_frame(connection, chat_message)
+		}
+	}
 }
 
 Server_Context :: struct {
